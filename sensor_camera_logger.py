@@ -18,7 +18,7 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 
 def initialize_hardware():
     """Setup I2C, Multiplexer, and Sensors."""
-    hw = {'i2c': None, 'tca': None, 'front': None, 'left': None, 'right': None, 'status': "OK"}
+    hw = {'i2c': None, 'tca': None, 'front': None, 'left': None, 'right': None, 'back': None, 'status': "OK"}
     try:
         hw['i2c'] = busio.I2C(board.SCL, board.SDA)
         hw['tca'] = adafruit_tca9548a.TCA9548A(hw['i2c'])
@@ -32,6 +32,9 @@ def initialize_hardware():
             
         try: hw['right'] = adafruit_vl53l0x.VL53L0X(hw['tca'][2])
         except Exception: hw['status'] = "RIGHT_SENSOR_ERROR"
+
+        try: hw['back'] = adafruit_vl53l0x.VL53L0X(hw['tca'][3])
+        except Exception: hw['status'] = "BACK_SENSOR_ERROR"
 
     except Exception as e:
         print(f"CRITICAL SENSOR_ERROR (I2C/TCA): {e}")
@@ -49,8 +52,8 @@ def get_status(distance):
     else:
         return "DANGER"
 
-def determine_logic(f_stat, l_stat, r_stat):
-    statuses = [f_stat, l_stat, r_stat]
+def determine_logic(f_stat, l_stat, r_stat, b_stat):
+    statuses = [f_stat, l_stat, r_stat, b_stat]
     danger_count = statuses.count("DANGER")
     
     # Calculate overall status (highest severity)
@@ -63,9 +66,11 @@ def determine_logic(f_stat, l_stat, r_stat):
     if danger_count > 1 or f_stat == "DANGER": decision = "STOP / HOLD"
     elif l_stat == "DANGER": decision = "MOVE RIGHT"
     elif r_stat == "DANGER": decision = "MOVE LEFT"
+    elif b_stat == "DANGER": decision = "HOLD POSITION (NO REVERSE)"
     elif f_stat == "WARNING": decision = "SLOW / CAUTION"
     elif l_stat == "WARNING": decision = "SLIGHT RIGHT CORRECTION"
     elif r_stat == "WARNING": decision = "SLIGHT LEFT CORRECTION"
+    elif b_stat == "WARNING": decision = "CAUTION REVERSE"
     elif overall == "SAFE": decision = "MOVE FORWARD"
     else: decision = "UNKNOWN"
 
@@ -100,7 +105,7 @@ def main():
         with open(CSV_FILENAME, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["timestamp", "front_distance_mm", "left_distance_mm", 
-                             "right_distance_mm", "overall_status", "decision", 
+                             "right_distance_mm", "back_distance_mm", "overall_status", "decision", 
                              "image_filename", "error_status"])
 
     print("Starting Main Logger Loop... (Press Ctrl+C to stop)")
@@ -108,7 +113,7 @@ def main():
     try:
         while True:
             current_time = time.strftime("%Y-%m-%d %H:%M:%S")
-            dists = {'f': None, 'l': None, 'r': None}
+            dists = {'f': None, 'l': None, 'r': None, 'b': None}
             error_status = hw['status']
 
             # Read Front
@@ -126,11 +131,17 @@ def main():
                 try: dists['r'] = hw['right'].range
                 except Exception: error_status = "RIGHT_SENSOR_ERROR"
 
+            # Read Back
+            if hw['back']:
+                try: dists['b'] = hw['back'].range
+                except Exception: error_status = "BACK_SENSOR_ERROR"
+
             f_stat = get_status(dists['f'])
             l_stat = get_status(dists['l'])
             r_stat = get_status(dists['r'])
+            b_stat = get_status(dists['b'])
 
-            overall_status, decision = determine_logic(f_stat, l_stat, r_stat)
+            overall_status, decision = determine_logic(f_stat, l_stat, r_stat, b_stat)
 
             # Camera Trigger Logic
             image_filename = "N/A"
@@ -141,7 +152,7 @@ def main():
                     error_status = "CAMERA_ERROR" if error_status == "OK" else error_status + " | CAMERA_ERROR"
 
             # Print to console
-            print(f"{current_time} | F:{dists['f']} L:{dists['l']} R:{dists['r']} | {decision} | Error: {error_status}")
+            print(f"{current_time} | F:{dists['f']} L:{dists['l']} R:{dists['r']} B:{dists['b']} | {decision} | Error: {error_status}")
 
             # Log to CSV
             with open(CSV_FILENAME, mode='a', newline='') as file:
@@ -151,6 +162,7 @@ def main():
                     dists['f'] if dists['f'] is not None else "ERROR",
                     dists['l'] if dists['l'] is not None else "ERROR",
                     dists['r'] if dists['r'] is not None else "ERROR",
+                    dists['b'] if dists['b'] is not None else "ERROR",
                     overall_status, 
                     decision, 
                     image_filename, 
