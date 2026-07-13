@@ -167,6 +167,7 @@ def main():
 
             # --- Trigger image capture on any DANGER ---
             if "DANGER" in (f_stat, l_stat, r_stat, b_stat):
+                pass
                 # capture_image(reason="DANGER")
 
             if camera_process.poll() is not None:
