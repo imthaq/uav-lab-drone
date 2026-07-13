@@ -129,7 +129,7 @@ def safe_read(sensor):
 
 # --- Main program ---
 def main():
-    start_camera()
+    # start_camera()
     i2c = busio.I2C(board.SCL, board.SDA)
     tca = adafruit_tca9548a.TCA9548A(i2c)
 
@@ -167,8 +167,7 @@ def main():
 
             # --- Trigger image capture on any DANGER ---
             if "DANGER" in (f_stat, l_stat, r_stat, b_stat):
-                pass
-                # capture_image(reason="DANGER")
+                capture_image(reason="DANGER")
 
             if camera_process.poll() is not None:
                 print("Camera process exited unexpectedly!")
