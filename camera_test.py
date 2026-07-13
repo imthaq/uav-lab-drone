@@ -8,7 +8,7 @@ def test_camera():
     try:
         # '-t 1000' gives the sensor 1 second to warm up/focus
         result = subprocess.run(
-            ["libcamera-jpeg", "-o", filename, "--nopreview", "-t", "1000"],
+            ["libcamera-jpeg", "-o", filename, "--nopreview", "-t", "1000", "--vflip"],
             capture_output=True, text=True
         )
         
