@@ -1,8 +1,10 @@
 import subprocess
 import time
+import os
 
 def test_camera():
-    filename = f"test_{int(time.time())}.jpg"
+    os.makedirs("images", exist_ok=True)
+    filename = f"images/test_{int(time.time())}.jpg"
     print(f"Attempting to capture {filename} (with vertical flip)...")
     
     try:
