@@ -82,8 +82,9 @@ def capture_image():
     filename = f"{IMAGE_DIR}/alert_{timestamp}.jpg"
     
     try:
+        # Updated to use rpicam-still and added --vflip
         result = subprocess.run(
-            ["libcamera-jpeg", "-o", filename, "--nopreview", "-t", "500"],
+            ["rpicam-still", "-o", filename, "--nopreview", "-t", "500", "--vflip"],
             capture_output=True, text=True
         )
         if result.returncode == 0:
