@@ -31,6 +31,7 @@ def main():
     print("Heartbeat received!")
     print(f"  System ID:    {master.target_system}")
     print(f"  Component ID: {master.target_component}")
+    print(f"  Raw heartbeat: {msg}")
 
     master.close()
     print("Connection closed.")
