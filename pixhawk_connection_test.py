@@ -17,7 +17,7 @@ import sys
 from pymavlink import mavutil
 
 # Default connection - change as needed, or pass as a command-line argument
-CONNECTION_STRING = sys.argv[1] if len(sys.argv) > 1 else "/dev/ttyACM0"
+CONNECTION_STRING = sys.argv[1] if len(sys.argv) > 1 else "/dev/ttyAMA0"
 BAUD_RATE = 57600  # ignored for udp/tcp connections
 
 def main():
@@ -26,12 +26,20 @@ def main():
     master = mavutil.mavlink_connection(CONNECTION_STRING, baud=BAUD_RATE)
 
     print("Waiting for heartbeat...")
-    master.wait_heartbeat()
+    msg = master.wait_heartbeat()
+
+    # Force target_component to the real autopilot component,
+    # in case the heartbeat reported 0 (broadcast/all).
+    master.target_component = 1
 
     print("Heartbeat received!")
     print(f"  System ID:    {master.target_system}")
-    print(f"  Component ID: {master.target_component}")
-    print(f"  Raw heartbeat: {master}")
+    print(f"  Component ID (raw from heartbeat): {msg.get_srcComponent()}")
+    print(f"  Component ID (forced for commands): {master.target_component}")
+    print(f"  Autopilot type: {msg.autopilot}")
+    print(f"  Vehicle type:   {msg.type}")
+    print(f"  Base mode:      {msg.base_mode}")
+    print(f"  System status:  {msg.system_status}")
 
     master.close()
     print("Connection closed.")
