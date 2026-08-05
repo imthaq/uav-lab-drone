@@ -45,38 +45,39 @@ CSV_FILENAME = "hardware_integration_log.csv"
 IMAGE_DIR = "captures"
 LOOP_DELAY = 0.5
 
+# ---------------------------------------------------------------------------
+# TCA9548A channel mapping — the single source of truth for sensor position.
+# All sensor init/read/log logic below reads from this dict; no channel
+# numbers are hardcoded anywhere else in the file. To physically re-map a
+# sensor (e.g. swap left/right), change it here only.
+# ---------------------------------------------------------------------------
+CHANNEL_MAP = {
+    'front': 0,
+    'left': 1,
+    'right': 2,
+    'back': 3,
+}
+
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
-# Sensor / camera hardware (front=CH0, left=CH1, right=CH2, back=CH3)
+# Sensor / camera hardware — positions and channels driven by CHANNEL_MAP
 # ---------------------------------------------------------------------------
 def initialize_sensor_hardware():
-    hw = {'i2c': None, 'tca': None, 'front': None, 'left': None,
-          'right': None, 'back': None, 'status': "OK"}
+    hw = {'i2c': None, 'tca': None, 'status': "OK"}
+    for position in CHANNEL_MAP:
+        hw[position] = None
+
     try:
         hw['i2c'] = busio.I2C(board.SCL, board.SDA)
         hw['tca'] = adafruit_tca9548a.TCA9548A(hw['i2c'])
 
-        try:
-            hw['front'] = adafruit_vl53l0x.VL53L0X(hw['tca'][0])
-        except Exception:
-            hw['status'] = "FRONT_SENSOR_ERROR"
-
-        try:
-            hw['left'] = adafruit_vl53l0x.VL53L0X(hw['tca'][1])
-        except Exception:
-            hw['status'] = "LEFT_SENSOR_ERROR"
-
-        try:
-            hw['right'] = adafruit_vl53l0x.VL53L0X(hw['tca'][2])
-        except Exception:
-            hw['status'] = "RIGHT_SENSOR_ERROR"
-
-        try:
-            hw['back'] = adafruit_vl53l0x.VL53L0X(hw['tca'][3])
-        except Exception:
-            hw['status'] = "BACK_SENSOR_ERROR"
+        for position, channel in CHANNEL_MAP.items():
+            try:
+                hw[position] = adafruit_vl53l0x.VL53L0X(hw['tca'][channel])
+            except Exception:
+                hw['status'] = f"{position.upper()}_SENSOR_ERROR"
 
     except Exception as e:
         print(f"CRITICAL SENSOR_ERROR (I2C/TCA): {e}")
