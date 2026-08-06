@@ -2,7 +2,7 @@
 """
 pixhawk_connection_test.py
 
-Task 11 — Improve Pixhawk connection stability.
+Task 11 - Improve Pixhawk connection stability.
 
 Tries each candidate serial device against each candidate baud rate until
 a MAVLink heartbeat is received, then stays connected and monitors the
@@ -119,7 +119,7 @@ def build_candidate_list():
 def try_connect(device, baud):
     """Attempt a single connection + heartbeat wait against one
     (device, baud) combination. Returns (master, msg) on success, or
-    (None, None) on failure. Never raises — all errors are logged."""
+    (None, None) on failure. Never raises - all errors are logged."""
     connection_start_time = time.strftime("%Y-%m-%d %H:%M:%S")
     log_event("connection_start", device=device, baud=baud or "-",
               connection_start_time=connection_start_time)
@@ -186,11 +186,11 @@ def probe_candidates():
 
 
 # ---------------------------------------------------------------------------
-# Monitoring loop — stays connected, survives missed heartbeats
+# Monitoring loop - stays connected, survives missed heartbeats
 # ---------------------------------------------------------------------------
 def monitor(master, device, baud):
     """Continuously watch the link. A missed heartbeat is logged and
-    triggers a reconnect attempt after RECONNECT_DELAY — it never crashes
+    triggers a reconnect attempt after RECONNECT_DELAY - it never crashes
     the program."""
     last_heartbeat_time = time.time()
     connected = True
@@ -218,7 +218,7 @@ def monitor(master, device, baud):
                     armed = is_armed(msg)
 
                 elif time.time() - last_heartbeat_time > MONITOR_HEARTBEAT_TIMEOUT:
-                    # Missed heartbeat(s) — log it and drop to reconnect mode,
+                    # Missed heartbeat(s) - log it and drop to reconnect mode,
                     # but do NOT crash or exit.
                     log_event("heartbeat_timeout", device=device, baud=baud or "-",
                               system_id=system_id, component_id=component_id,
