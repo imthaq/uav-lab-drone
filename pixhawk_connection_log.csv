@@ -1,0 +1,29 @@
+timestamp,event,device,baud,connection_start_time,heartbeat_received_time,system_id,component_id,flight_mode,armed,detail
+2026-08-06 10:54:17,connection_start,/dev/serial0,57600,2026-08-06 10:54:17,,,,,,
+2026-08-06 10:54:20,heartbeat_received,/dev/serial0,57600,2026-08-06 10:54:17,2026-08-06 10:54:20,1,1,STABILIZE,False,
+2026-08-06 10:55:12,heartbeat_timeout,/dev/serial0,57600,,,1,1,STABILIZE,False,no heartbeat for over 5s
+2026-08-06 10:55:12,reconnect_attempt,/dev/serial0,57600,,,,,,,attempting to reconnect
+2026-08-06 10:55:12,connection_start,/dev/serial0,57600,2026-08-06 10:55:12,,,,,,
+2026-08-06 10:55:22,heartbeat_timeout,/dev/serial0,57600,2026-08-06 10:55:12,,,,,,no heartbeat within 10s
+2026-08-06 10:55:22,reconnect_attempt,/dev/serial0,57600,,,,,,,FAILED
+2026-08-06 10:55:23,reconnect_attempt,/dev/serial0,57600,,,,,,,attempting to reconnect
+2026-08-06 10:55:23,connection_start,/dev/serial0,57600,2026-08-06 10:55:23,,,,,,
+2026-08-06 10:55:25,heartbeat_received,/dev/serial0,57600,2026-08-06 10:55:23,2026-08-06 10:55:25,1,1,STABILIZE,False,
+2026-08-06 10:55:25,reconnect_attempt,/dev/serial0,57600,,,1,1,STABILIZE,False,SUCCESS
+2026-08-06 11:00:10,connection_start,/dev/serial0,57600,2026-08-06 11:00:10,,,,,,
+2026-08-06 11:00:10,heartbeat_received,/dev/serial0,57600,2026-08-06 11:00:10,2026-08-06 11:00:10,1,1,ALT_HOLD,False,
+2026-08-06 11:00:40,heartbeat_timeout,/dev/serial0,57600,,,1,1,ALT_HOLD,False,no heartbeat for over 5s
+2026-08-06 11:00:40,reconnect_attempt,/dev/serial0,57600,,,,,,,attempting to reconnect
+2026-08-06 11:00:40,connection_start,/dev/serial0,57600,2026-08-06 11:00:40,,,,,,
+2026-08-06 11:00:50,heartbeat_timeout,/dev/serial0,57600,2026-08-06 11:00:40,,,,,,no heartbeat within 10s
+2026-08-06 11:00:50,reconnect_attempt,/dev/serial0,57600,,,,,,,FAILED
+2026-08-06 11:00:51,reconnect_attempt,/dev/serial0,57600,,,,,,,attempting to reconnect
+2026-08-06 11:00:51,connection_start,/dev/serial0,57600,2026-08-06 11:00:51,,,,,,
+2026-08-06 11:01:01,heartbeat_timeout,/dev/serial0,57600,2026-08-06 11:00:51,,,,,,no heartbeat within 10s
+2026-08-06 11:01:01,reconnect_attempt,/dev/serial0,57600,,,,,,,FAILED
+2026-08-06 11:01:01,reconnect_attempt,/dev/serial0,57600,,,,,,,attempting to reconnect
+2026-08-06 11:01:01,connection_start,/dev/serial0,57600,2026-08-06 11:01:01,,,,,,
+2026-08-06 11:01:03,heartbeat_received,/dev/serial0,57600,2026-08-06 11:01:01,2026-08-06 11:01:03,1,1,STABILIZE,False,
+2026-08-06 11:01:03,reconnect_attempt,/dev/serial0,57600,,,1,1,STABILIZE,False,SUCCESS
+2026-08-06 11:01:24,armed_status_change,/dev/serial0,57600,,,1,1,ALT_HOLD,True,changed from False to True
+2026-08-06 11:01:32,armed_status_change,/dev/serial0,57600,,,1,1,ALT_HOLD,False,changed from True to False
