@@ -41,8 +41,8 @@ RECONNECT_INTERVAL = 5.0         # seconds between reconnection attempts while d
 
 SAFE_THRESHOLD = 700
 DANGER_THRESHOLD = 300
-CSV_FILENAME = "hardware_integration_log.csv"
-IMAGE_DIR = "captures"
+CSV_FILENAME = "logs/drone1"
+IMAGE_DIR = "images/drone1"
 LOOP_DELAY = 0.5
 
 # ---------------------------------------------------------------------------
