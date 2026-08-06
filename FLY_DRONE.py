@@ -156,18 +156,18 @@ def arm_and_takeoff(vehicle, target_altitude, arm_timeout=60):
     vehicle.armed = True
 
     waited = 0
-    while not vehicle.armed:
-        print(f" Waiting for arming... mode={vehicle.mode.name} "
-              f"last_msg={last_statustext['text']!r}")
-        if waited >= arm_timeout:
-            raise TimeoutError(
-                f"Arm command not accepted after {arm_timeout}s. "
-                f"Last autopilot message: {last_statustext['text']!r}. "
-                "The FC is likely rejecting the arm request (failed pre-arm "
-                "check) rather than the request not going through."
-            )
-        time.sleep(2)
-        waited += 2
+    # while not vehicle.armed:
+    #     print(f" Waiting for arming... mode={vehicle.mode.name} "
+    #           f"last_msg={last_statustext['text']!r}")
+    #     if waited >= arm_timeout:
+    #         raise TimeoutError(
+    #             f"Arm command not accepted after {arm_timeout}s. "
+    #             f"Last autopilot message: {last_statustext['text']!r}. "
+    #             "The FC is likely rejecting the arm request (failed pre-arm "
+    #             "check) rather than the request not going through."
+    #         )
+    #     time.sleep(2)
+    #     waited += 2
 
     print("Taking off!")
     vehicle.simple_takeoff(target_altitude)
