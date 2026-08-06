@@ -101,23 +101,73 @@ def connect_to_vehicle():
     )
 
 
+def attach_statustext_listener(vehicle):
+    """
+    Register a listener that captures STATUSTEXT messages from the autopilot
+    (e.g. 'PreArm: GPS: waiting for lock', 'PreArm: Compass not calibrated').
+    These are the actual human-readable reasons arming is being refused -
+    is_armable/armed alone don't tell you why.
+    """
+    last_statustext = {"text": None}
+
+    def _on_statustext(_vehicle, _name, message):
+        if message is not None:
+            text = message.text.strip()
+            last_statustext["text"] = text
+            print(f" [autopilot] {text}")
+
+    vehicle.add_message_listener('STATUSTEXT', _on_statustext)
+    return last_statustext
+
+
 # ---------------------------------------------------------------------------
 # Flight helpers
 # ---------------------------------------------------------------------------
-def arm_and_takeoff(vehicle, target_altitude):
-    """Arms vehicle and flies to target_altitude (meters, relative)."""
+def arm_and_takeoff(vehicle, target_altitude, arm_timeout=60):
+    """Arms vehicle and flies to target_altitude (meters, relative).
+
+    While waiting, periodically prints GPS fix, satellite count, and EKF
+    status, and surfaces any PreArm/STATUSTEXT messages from the autopilot
+    via attach_statustext_listener(), so a stall is diagnosable instead of
+    silent. Raises TimeoutError if not armable/armed within arm_timeout
+    seconds of waiting at each stage, instead of hanging forever.
+    """
+    last_statustext = attach_statustext_listener(vehicle)
+
     print("Basic pre-arm checks")
+    waited = 0
     while not vehicle.is_armable:
-        print(" Waiting for vehicle to initialise...")
-        time.sleep(1)
+        gps = vehicle.gps_0
+        print(f" Waiting for vehicle to initialise... "
+              f"gps_fix={gps.fix_type} sats={gps.satellites_visible} "
+              f"ekf_ok={vehicle.ekf_ok} battery={vehicle.battery}")
+        if waited >= arm_timeout:
+            raise TimeoutError(
+                f"Vehicle not armable after {arm_timeout}s. "
+                f"Last autopilot message: {last_statustext['text']!r}. "
+                "Most common causes: no GPS fix yet, compass not calibrated, "
+                "or EKF still converging."
+            )
+        time.sleep(2)
+        waited += 2
 
     print("Arming motors")
     vehicle.mode = VehicleMode("GUIDED")
     vehicle.armed = True
 
+    waited = 0
     while not vehicle.armed:
-        print(" Waiting for arming...")
-        time.sleep(1)
+        print(f" Waiting for arming... mode={vehicle.mode.name} "
+              f"last_msg={last_statustext['text']!r}")
+        if waited >= arm_timeout:
+            raise TimeoutError(
+                f"Arm command not accepted after {arm_timeout}s. "
+                f"Last autopilot message: {last_statustext['text']!r}. "
+                "The FC is likely rejecting the arm request (failed pre-arm "
+                "check) rather than the request not going through."
+            )
+        time.sleep(2)
+        waited += 2
 
     print("Taking off!")
     vehicle.simple_takeoff(target_altitude)
