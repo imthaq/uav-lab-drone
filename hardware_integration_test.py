@@ -3,18 +3,33 @@
 hardware_integration_test.py
 
 Full hardware integration test: VL53L0X sensors (front/left/right/back via
-TCA9548A), camera capture on WARNING/DANGER, and Pixhawk MAVLink status —
+TCA9548A), camera capture on WARNING/DANGER, and Pixhawk MAVLink status -
 all logged to CSV in one loop.
 
-Task 12 — Reconnect behavior:
+Task 12 - Reconnect behavior:
 If the Pixhawk connection is lost mid-run:
   * Pixhawk status is marked DISCONNECTED
   * sensor logging continues normally (sensors are independent of the Pixhawk link)
-  * no movement decision is issued — decision is forced to
+  * no movement decision is issued - decision is forced to
     "HOLD / CONNECTION FAULT" regardless of sensor readings
   * reconnection is attempted after a short delay (not every loop iteration,
     to avoid hammering the serial port)
   * the result of each reconnection attempt (SUCCESS/FAILED) is recorded in the CSV
+
+Task 16 - Response time measurement:
+Every loop iteration times each stage of the pipeline and writes the
+results to drone1_response_time_results.csv:
+  * obstacle first detected time - right after raw sensor ranges are read
+  * status change time - right after SAFE/WARNING/DANGER/ERROR is classified
+  * decision generation time - right after the movement decision is chosen
+  * image capture time - right after the alert photo is saved (N/A if no
+    capture was triggered this iteration)
+  * csv write time - right after the main hardware_integration_log.csv row
+    is written
+Latencies (milliseconds) are calculated between consecutive stages:
+  * sensor_to_status_latency_ms
+  * status_to_decision_latency_ms
+  * decision_to_image_latency_ms (N/A when no image was captured)
 
 Requires: pip install pymavlink adafruit-circuitpython-tca9548a adafruit-circuitpython-vl53l0x
 """
@@ -24,6 +39,7 @@ import sys
 import csv
 import time
 import subprocess
+from datetime import datetime
 
 import board
 import busio
@@ -46,7 +62,32 @@ IMAGE_DIR = "captures"
 LOOP_DELAY = 0.5
 
 # ---------------------------------------------------------------------------
-# TCA9548A channel mapping — the single source of truth for sensor position.
+# Task 16: response-time measurement
+# ---------------------------------------------------------------------------
+RESPONSE_TIME_CSV_FILENAME = "drone1_response_time_results.csv"
+RESPONSE_TIME_CSV_FIELDS = [
+    "timestamp",
+    "obstacle_first_detected_time", "status_change_time",
+    "decision_generation_time", "image_capture_time", "csv_write_time",
+    "overall_status", "decision", "image_captured",
+    "sensor_to_status_latency_ms", "status_to_decision_latency_ms",
+    "decision_to_image_latency_ms",
+]
+
+
+def timestamp_str():
+    """Wall-clock timestamp with millisecond precision, for the *_time
+    log fields (human-readable, sortable)."""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+
+def init_response_time_csv():
+    if not os.path.isfile(RESPONSE_TIME_CSV_FILENAME):
+        with open(RESPONSE_TIME_CSV_FILENAME, mode="w", newline="") as f:
+            csv.writer(f).writerow(RESPONSE_TIME_CSV_FIELDS)
+
+# ---------------------------------------------------------------------------
+# TCA9548A channel mapping - the single source of truth for sensor position.
 # All sensor init/read/log logic below reads from this dict; no channel
 # numbers are hardcoded anywhere else in the file. To physically re-map a
 # sensor (e.g. swap left/right), change it here only.
@@ -62,7 +103,7 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
-# Sensor / camera hardware — positions and channels driven by CHANNEL_MAP
+# Sensor / camera hardware - positions and channels driven by CHANNEL_MAP
 # ---------------------------------------------------------------------------
 def initialize_sensor_hardware():
     hw = {'i2c': None, 'tca': None, 'status': "OK"}
@@ -97,18 +138,25 @@ def get_status(distance):
         return "DANGER"
 
 
-def determine_logic(f_stat, l_stat, r_stat, b_stat):
+def determine_overall_status(f_stat, l_stat, r_stat, b_stat):
+    """Task 16: split out from the old determine_logic() so that status
+    determination and decision generation are separately timeable."""
     statuses = [f_stat, l_stat, r_stat, b_stat]
-    danger_count = statuses.count("DANGER")
 
     if "DANGER" in statuses:
-        overall = "DANGER"
+        return "DANGER"
     elif "WARNING" in statuses:
-        overall = "WARNING"
+        return "WARNING"
     elif "ERROR" in statuses:
-        overall = "ERROR"
+        return "ERROR"
     else:
-        overall = "SAFE"
+        return "SAFE"
+
+
+def determine_decision(overall, f_stat, l_stat, r_stat, b_stat):
+    """Task 16: split out from the old determine_logic()."""
+    statuses = [f_stat, l_stat, r_stat, b_stat]
+    danger_count = statuses.count("DANGER")
 
     if danger_count > 1 or f_stat == "DANGER":
         decision = "STOP / HOLD"
@@ -131,7 +179,7 @@ def determine_logic(f_stat, l_stat, r_stat, b_stat):
     else:
         decision = "UNKNOWN"
 
-    return overall, decision
+    return decision
 
 
 def capture_image():
@@ -224,7 +272,7 @@ class PixhawkLink:
             self.status = "DISCONNECTED"
             return
 
-        # Heartbeat timeout — link is open but Pixhawk has gone quiet
+        # Heartbeat timeout - link is open but Pixhawk has gone quiet
         if self.status == "CONNECTED" and (time.time() - self.last_heartbeat_time) > HEARTBEAT_TIMEOUT:
             self.status = "DISCONNECTED"
 
@@ -239,7 +287,7 @@ class PixhawkLink:
             return None
 
         self.last_reconnect_attempt = now
-        print("Pixhawk link lost — attempting reconnection...")
+        print("Pixhawk link lost - attempting reconnection...")
         success = self._connect()
         if success:
             print(f"Reconnection SUCCESS. Flight mode: {self.flight_mode}, Armed: {self.armed}")
@@ -264,6 +312,8 @@ def main():
                 "decision", "image_filename", "sensor_error_status",
                 "pixhawk_status", "flight_mode", "armed", "reconnect_result",
             ])
+
+    init_response_time_csv()
 
     print("Starting hardware integration test loop... (Press Ctrl+C to stop)")
 
@@ -294,11 +344,21 @@ def main():
                 except Exception:
                     sensor_error_status = "BACK_SENSOR_ERROR"
 
+            # --- Task 16: obstacle first detected (raw sensor data in hand) ---
+            t_obstacle = time.perf_counter()
+            obstacle_first_detected_time = timestamp_str()
+
             f_stat = get_status(dists['f'])
             l_stat = get_status(dists['l'])
             r_stat = get_status(dists['r'])
             b_stat = get_status(dists['b'])
-            overall_status, decision = determine_logic(f_stat, l_stat, r_stat, b_stat)
+            overall_status = determine_overall_status(f_stat, l_stat, r_stat, b_stat)
+
+            # --- Task 16: status classification complete ---
+            t_status = time.perf_counter()
+            status_change_time = timestamp_str()
+
+            decision = determine_decision(overall_status, f_stat, l_stat, r_stat, b_stat)
 
             # --- Pixhawk link check + reconnect (Task 12) ---
             pixhawk.poll()
@@ -309,11 +369,22 @@ def main():
                 # what the sensors say.
                 decision = "HOLD / CONNECTION FAULT"
 
+            # --- Task 16: decision generation complete ---
+            t_decision = time.perf_counter()
+            decision_generation_time = timestamp_str()
+
             # Camera trigger on WARNING/DANGER (independent of Pixhawk link state)
             image_filename = "N/A"
+            image_captured = False
+            t_image = None
+            image_capture_time = "N/A"
             if overall_status in ["WARNING", "DANGER"]:
                 print(f"[{overall_status}] detected! Triggering camera...")
                 image_filename = capture_image()
+                image_captured = image_filename != "CAMERA_ERROR"
+                # --- Task 16: image capture complete ---
+                t_image = time.perf_counter()
+                image_capture_time = timestamp_str()
                 if image_filename == "CAMERA_ERROR":
                     sensor_error_status = (
                         "CAMERA_ERROR" if sensor_error_status == "OK"
@@ -342,6 +413,34 @@ def main():
                     pixhawk.flight_mode,
                     pixhawk.armed,
                     reconnect_result if reconnect_result is not None else "N/A",
+                ])
+
+            # --- Task 16: main CSV write complete ---
+            t_csv = time.perf_counter()
+            csv_write_time = timestamp_str()
+
+            # --- Task 16: latency calculations ---
+            sensor_to_status_latency_ms = round((t_status - t_obstacle) * 1000, 3)
+            status_to_decision_latency_ms = round((t_decision - t_status) * 1000, 3)
+            decision_to_image_latency_ms = (
+                round((t_image - t_decision) * 1000, 3) if t_image is not None else "N/A"
+            )
+
+            with open(RESPONSE_TIME_CSV_FILENAME, mode='a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    current_time,
+                    obstacle_first_detected_time,
+                    status_change_time,
+                    decision_generation_time,
+                    image_capture_time,
+                    csv_write_time,
+                    overall_status,
+                    decision,
+                    image_captured,
+                    sensor_to_status_latency_ms,
+                    status_to_decision_latency_ms,
+                    decision_to_image_latency_ms,
                 ])
 
             if "CRITICAL" not in sensor_error_status:
