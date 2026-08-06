@@ -176,29 +176,37 @@ def try_connect(device, baud):
 
 def probe_candidates():
     """Try every (device, baud) candidate in order until one succeeds.
-    Returns (master, device, baud) for the working combination, or
-    (None, None, None) if every candidate failed."""
+    Returns (master, device, baud, msg) for the working combination, or
+    (None, None, None, None) if every candidate failed."""
     for device, baud in build_candidate_list():
         master, msg = try_connect(device, baud)
         if master is not None:
-            return master, device, baud
-    return None, None, None
+            return master, device, baud, msg
+    return None, None, None, None
 
 
 # ---------------------------------------------------------------------------
 # Monitoring loop - stays connected, survives missed heartbeats
 # ---------------------------------------------------------------------------
-def monitor(master, device, baud):
+def monitor(master, device, baud, initial_msg=None):
     """Continuously watch the link. A missed heartbeat is logged and
     triggers a reconnect attempt after RECONNECT_DELAY - it never crashes
-    the program."""
+    the program. An armed/disarmed transition is logged the moment it is
+    observed, not just on the next timeout/reconnect event."""
     last_heartbeat_time = time.time()
     connected = True
     last_reconnect_attempt = 0.0
-    flight_mode = "UNKNOWN"
-    armed = False
     system_id = master.target_system
     component_id = master.target_component
+
+    # Seed flight_mode/armed from the heartbeat we already received during
+    # connection, rather than resetting to UNKNOWN/False.
+    if initial_msg is not None:
+        flight_mode = decode_flight_mode(initial_msg)
+        armed = is_armed(initial_msg)
+    else:
+        flight_mode = "UNKNOWN"
+        armed = False
 
     print("Monitoring Pixhawk link. Press Ctrl+C to stop.")
 
@@ -214,8 +222,16 @@ def monitor(master, device, baud):
             else:
                 if msg is not None:
                     last_heartbeat_time = time.time()
-                    flight_mode = decode_flight_mode(msg)
-                    armed = is_armed(msg)
+                    new_flight_mode = decode_flight_mode(msg)
+                    new_armed = is_armed(msg)
+
+                    if new_armed != armed:
+                        log_event("armed_status_change", device=device, baud=baud or "-",
+                                  system_id=system_id, component_id=component_id,
+                                  flight_mode=new_flight_mode, armed=new_armed,
+                                  detail=f"changed from {armed} to {new_armed}")
+
+                    flight_mode, armed = new_flight_mode, new_armed
 
                 elif time.time() - last_heartbeat_time > MONITOR_HEARTBEAT_TIMEOUT:
                     # Missed heartbeat(s) - log it and drop to reconnect mode,
@@ -260,7 +276,7 @@ def main():
     init_csv()
 
     print("Probing for Pixhawk connection...")
-    master, device, baud = probe_candidates()
+    master, device, baud, initial_msg = probe_candidates()
 
     if master is None:
         print("Could not establish a Pixhawk connection on any candidate "
@@ -272,7 +288,7 @@ def main():
     print(f"Connected on {device} @ {baud or 'default'} baud.")
 
     try:
-        monitor(master, device, baud)
+        monitor(master, device, baud, initial_msg=initial_msg)
     except KeyboardInterrupt:
         print("\nStopped by user.")
     finally:
